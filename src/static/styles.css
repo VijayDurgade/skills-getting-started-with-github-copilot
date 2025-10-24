@@ -142,3 +142,36 @@ footer {
   padding: 20px;
   color: #666;
 }
+
+.participants {
+  background: #ffffff;
+  border: 1px solid rgba(26, 35, 126, 0.06);
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-top: 10px;
+}
+
+.participants strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #1a237e;
+  font-size: 14px;
+}
+
+.participants-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #223344;
+  font-size: 14px;
+}
+
+.participants-list li {
+  margin: 4px 0;
+  list-style: disc;
+}
+
+/* Keep the "none" style consistent */
+.none {
+  color: #666;
+  font-size: 14px;
+}
