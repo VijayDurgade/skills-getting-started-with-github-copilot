@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mergington High — Activities</title>
+<style>
+/* Pretty, simple card layout */
+:root{ --bg:#f6f8fa; --card:#ffffff; --accent:#2b6cb0; --muted:#6b7280; --shadow: 0 6px 18px rgba(12,15,20,0.08); }
+body{ margin:0; font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:linear-gradient(180deg,#f8fafb,#f2f6fa); color:#0f172a; }
+header{ padding:28px 36px; text-align:center; }
+h1{ margin:0; font-size:20px; letter-spacing:-0.2px; color:var(--accent); }
+p.lead{ margin:6px 0 0; color:var(--muted); font-size:13px; }
+
+.container{ max-width:1100px; margin:26px auto; padding:0 20px; }
+.grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap:18px; }
+
+.card{ background:var(--card); border-radius:12px; padding:16px; box-shadow:var(--shadow); transition:transform .12s ease, box-shadow .12s ease; }
+.card:hover{ transform: translateY(-6px); box-shadow: 0 14px 30px rgba(12,15,20,0.09); }
+.card h3{ margin:0 0 8px; font-size:16px; color:#0b3a66; }
+.desc{ margin:0 0 10px; color:var(--muted); font-size:13px; }
+.meta{ font-size:13px; color:var(--muted); margin-bottom:10px; }
+.capacity{ font-weight:600; color:#0b3a66; margin-bottom:10px; }
+.participants{ background:#fbfdff; border-radius:8px; padding:10px; border:1px solid rgba(43,108,176,0.06); margin-bottom:12px; }
+.participants strong{ display:block; margin-bottom:6px; font-size:13px; color:#0b3a66; }
+.participants ul{ margin:0; padding-left:18px; color:#153b5a; font-size:13px; }
+.participants li{ margin:4px 0; list-style: disc; }
+.none{ color:var(--muted); font-size:13px; }
+
+.actions{ display:flex; gap:8px; align-items:center; }
+.actions input.email{ flex:1; padding:8px 10px; border-radius:8px; border:1px solid #e6eef8; font-size:13px; }
+.actions button.signup{ background:var(--accent); color:#fff; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:600; }
+.actions button.signup:active{ transform:translateY(1px); }
+
+.footer{ text-align:center; margin:22px 0 40px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mergington High — Extracurricular Activities</h1>
+  <p class="lead">Browse activities and see who is already signed up.</p>
+</header>
+
+<main class="container">
+  <div id="cards" class="grid" aria-live="polite">
+    <!-- ... cards injected here ... -->
+  </div>
+  <div class="footer">Tip: enter your school email and click "Sign up" on any activity to add a participant.</div>
+</main>
+
+<script>
+// filepath helper: front-end fetch + render participants as bulleted list
+async function loadActivities(){
+  const res = await fetch('/activities');
+  if(!res.ok){ document.getElementById('cards').innerHTML = '<p style="color:#d9534f">Failed to load activities</p>'; return; }
+  const data = await res.json();
+  const cards = document.getElementById('cards');
+  cards.innerHTML = '';
+
+  for(const [name, a] of Object.entries(data)){
+    const card = document.createElement('article');
+    card.className = 'card';
+
+    // Build participants block: if none, show friendly text; otherwise bulleted list
+    const participantsHtml = (a.participants && a.participants.length)
+      ? '<ul class="participant-list" style="list-style:none; padding-left:0; margin:0;">' +
+        a.participants.map(p => `
+          <li style="display:flex;align-items:center;gap:6px;margin:4px 0;">
+            <span>${escapeHtml(p)}</span>
+            <button class="delete-participant" title="Remove participant" data-email="${escapeHtml(p)}" style="background:none;border:none;color:#d9534f;cursor:pointer;font-size:16px;line-height:1;padding:0 4px;">&#128465;</button>
+          </li>`).join('') + '</ul>'
+      : '<div class="none">No participants yet — be the first!</div>';
+
+    card.innerHTML = `
+      <h3>${escapeHtml(name)}</h3>
+      <p class="desc">${escapeHtml(a.description)}</p>
+      <div class="meta"><strong>Schedule:</strong> ${escapeHtml(a.schedule)}</div>
+      <div class="capacity">Capacity: ${a.participants.length} / ${a.max_participants}</div>
+      <div class="participants">
+        <strong>Participants (${a.participants.length})</strong>
+        ${participantsHtml}
+      </div>
+      <div class="actions">
+        <input class="email" type="email" placeholder="you@school.edu" aria-label="email for ${escapeHtml(name)}" />
+        <button class="signup">Sign up</button>
+      </div>
+    `;
+
+    cards.appendChild(card);
+
+    // hookup signup button
+    const btn = card.querySelector('.signup');
+    const input = card.querySelector('.email');
+    btn.addEventListener('click', async () => {
+      const email = input.value.trim();
+      if(!email){ alert('Please enter an email address'); return; }
+      try {
+        const r = await fetch(`/activities/${encodeURIComponent(name)}/signup?email=${encodeURIComponent(email)}`, { method: 'POST' });
+        if(!r.ok){
+          const err = await r.json().catch(()=>({ detail: 'Signup failed' }));
+          throw new Error(err.detail || 'Signup failed');
+        }
+        const body = await r.json();
+        alert(body.message || 'Signed up');
+        loadActivities(); // refresh list to show new participant
+      } catch(e){
+        alert(e.message || 'Error signing up');
+      }
+    });
+
+    // hookup delete buttons for participants
+    card.querySelectorAll('.delete-participant').forEach(delBtn => {
+      delBtn.addEventListener('click', async (e) => {
+        const email = delBtn.getAttribute('data-email');
+        if(!confirm(`Remove ${email} from ${name}?`)) return;
+        try {
+          const r = await fetch(`/activities/${encodeURIComponent(name)}/unregister?email=${encodeURIComponent(email)}`, { method: 'POST' });
+          if(!r.ok){
+            const err = await r.json().catch(()=>({ detail: 'Unregister failed' }));
+            throw new Error(err.detail || 'Unregister failed');
+          }
+          const body = await r.json();
+          alert(body.message || 'Participant removed');
+          loadActivities();
+        } catch(e){
+          alert(e.message || 'Error removing participant');
+        }
+      });
+    });
+  }
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, s => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;" }[s]));
+}
+
+loadActivities();
+</script>
+</body>
+</html>
