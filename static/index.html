@@ -63,7 +63,12 @@ async function loadActivities(){
 
     // Build participants block: if none, show friendly text; otherwise bulleted list
     const participantsHtml = (a.participants && a.participants.length)
-      ? '<ul>' + a.participants.map(p => `<li>${escapeHtml(p)}</li>`).join('') + '</ul>'
+      ? '<ul class="participant-list" style="list-style:none; padding-left:0; margin:0;">' +
+        a.participants.map(p => `
+          <li style="display:flex;align-items:center;gap:6px;margin:4px 0;">
+            <span>${escapeHtml(p)}</span>
+            <button class="delete-participant" title="Remove participant" data-email="${escapeHtml(p)}" style="background:none;border:none;color:#d9534f;cursor:pointer;font-size:16px;line-height:1;padding:0 4px;">&#128465;</button>
+          </li>`).join('') + '</ul>'
       : '<div class="none">No participants yet — be the first!</div>';
 
     card.innerHTML = `
@@ -101,6 +106,26 @@ async function loadActivities(){
       } catch(e){
         alert(e.message || 'Error signing up');
       }
+    });
+
+    // hookup delete buttons for participants
+    card.querySelectorAll('.delete-participant').forEach(delBtn => {
+      delBtn.addEventListener('click', async (e) => {
+        const email = delBtn.getAttribute('data-email');
+        if(!confirm(`Remove ${email} from ${name}?`)) return;
+        try {
+          const r = await fetch(`/activities/${encodeURIComponent(name)}/unregister?email=${encodeURIComponent(email)}`, { method: 'POST' });
+          if(!r.ok){
+            const err = await r.json().catch(()=>({ detail: 'Unregister failed' }));
+            throw new Error(err.detail || 'Unregister failed');
+          }
+          const body = await r.json();
+          alert(body.message || 'Participant removed');
+          loadActivities();
+        } catch(e){
+          alert(e.message || 'Error removing participant');
+        }
+      });
     });
   }
 }
